@@ -11,12 +11,14 @@ const SPREADSHEET_ID = process.env.SPREADSHEET_ID;
 const LEADER_PASSWORD = process.env.LEADER_PASSWORD || '1366';
 
 async function getSheetsClient() {
-    if (!process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL || !process.env.GOOGLE_PRIVATE_KEY || !SPREADSHEET_ID) {
-        throw new Error("Missing required Environment Variables in Vercel!");
-    }
+    if (!process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL) throw new Error("Environment Variable တွင် GOOGLE_SERVICE_ACCOUNT_EMAIL မရှိပါ။");
+    if (!process.env.GOOGLE_PRIVATE_KEY) throw new Error("Environment Variable တွင် GOOGLE_PRIVATE_KEY မရှိပါ။");
+    if (!SPREADSHEET_ID) throw new Error("Environment Variable တွင် SPREADSHEET_ID မရှိပါ။");
     
-    const privateKey = process.env.GOOGLE_PRIVATE_KEY.replace(/\\n/g, '\n');
-    
+    let privateKey = process.env.GOOGLE_PRIVATE_KEY;
+    // Fix private key formatting issues
+    privateKey = privateKey.replace(/^["'](.*)["']$/, '$1').replace(/\\n/g, '\n');
+
     const auth = new google.auth.JWT(
         process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL,
         null,
@@ -45,8 +47,6 @@ async function getSheetData(sheetName) {
     });
 }
 
-const generateId = (prefix) => `${prefix}_${Date.now()}_${Math.random().toString(36).substr(2, 4)}`;
-
 const router = express.Router();
 
 router.get('/categories', async (req, res) => {
@@ -54,8 +54,7 @@ router.get('/categories', async (req, res) => {
         const data = await getSheetData('Categories');
         res.json({ success: true, data });
     } catch (error) {
-        console.error("Error in /categories:", error);
-        res.status(500).json({ success: false, error: error.message });
+        res.status(500).json({ success: false, error: error.message, details: "Categories sheet ကို ဖတ်၍မရပါ။ Sheet နာမည် (သို့) Permission ကို စစ်ဆေးပါ။" });
     }
 });
 
@@ -65,21 +64,7 @@ router.get('/processes', async (req, res) => {
         const published = data.filter(p => p.Status === 'Published' && p.Status !== 'Archived');
         res.json({ success: true, data: published });
     } catch (error) {
-        console.error("Error in /processes:", error);
-        res.status(500).json({ success: false, error: error.message });
-    }
-});
-
-router.get('/process-detail', async (req, res) => {
-    try {
-        const { id } = req.query;
-        const data = await getSheetData('Processes');
-        const row = data.find(p => p.ProcessID === id);
-        if (!row) return res.status(404).json({ success: false, message: 'Process not found' });
-        res.json({ success: true, data: row });
-    } catch (error) {
-        console.error("Error in /process-detail:", error);
-        res.status(500).json({ success: false, error: error.message });
+        res.status(500).json({ success: false, error: error.message, details: "Processes sheet ကို ဖတ်၍မရပါ။" });
     }
 });
 
@@ -104,8 +89,7 @@ router.get('/promotions', async (req, res) => {
 
         res.json({ success: true, data: processed });
     } catch (error) {
-        console.error("Error in /promotions:", error);
-        res.status(500).json({ success: false, error: error.message });
+        res.status(500).json({ success: false, error: error.message, details: "Promotions sheet ကို ဖတ်၍မရပါ။" });
     }
 });
 
@@ -115,85 +99,6 @@ router.post('/login', (req, res) => {
         res.json({ success: true, message: 'Login successful' });
     } else {
         res.status(401).json({ success: false, message: 'Invalid Password' });
-    }
-});
-
-const verifyLeaderAuth = (req, res, next) => {
-    const pwd = req.headers['x-leader-password'];
-    if (pwd !== LEADER_PASSWORD) {
-        return res.status(401).json({ success: false, message: 'Unauthorized: Invalid Leader Password' });
-    }
-    next();
-};
-
-router.post('/process', verifyLeaderAuth, async (req, res) => {
-    try {
-        const sheets = await getSheetsClient();
-        const resValues = await sheets.spreadsheets.values.get({ spreadsheetId: SPREADSHEET_ID, range: 'Processes!A1:Z1' });
-        const headers = resValues.data.values[0];
-
-        const newObj = {
-            ProcessID: generateId('PROC'),
-            Title: req.body.Title || '',
-            CategoryID: req.body.CategoryID || '',
-            Summary: req.body.Summary || '',
-            ProcessContent: req.body.ProcessContent || '',
-            AttachmentLink: req.body.AttachmentLink || '',
-            SearchKeywords: req.body.SearchKeywords || '',
-            Status: req.body.Status || 'Published',
-            EffectiveDate: req.body.EffectiveDate || new Date().toISOString().split('T')[0],
-            CreatedDate: new Date().toISOString(),
-            UpdatedDate: new Date().toISOString()
-        };
-
-        const rowArray = headers.map(h => newObj[h] !== undefined ? newObj[h] : '');
-        await sheets.spreadsheets.values.append({
-            spreadsheetId: SPREADSHEET_ID,
-            range: 'Processes!A1',
-            valueInputOption: 'USER_ENTERED',
-            requestBody: { values: [rowArray] }
-        });
-
-        res.json({ success: true, message: 'Process created successfully', data: newObj });
-    } catch (error) {
-        console.error("Error in POST /process:", error);
-        res.status(500).json({ success: false, error: error.message });
-    }
-});
-
-router.post('/promotion', verifyLeaderAuth, async (req, res) => {
-    try {
-        const sheets = await getSheetsClient();
-        const resValues = await sheets.spreadsheets.values.get({ spreadsheetId: SPREADSHEET_ID, range: 'Promotions!A1:Z1' });
-        const headers = resValues.data.values[0];
-
-        const newObj = {
-            PromotionID: generateId('PROMO'),
-            PromotionName: req.body.PromotionName || '',
-            CategoryID: req.body.CategoryID || '',
-            Description: req.body.Description || '',
-            PromotionRules: req.body.PromotionRules || '',
-            ApplicableProducts: req.body.ApplicableProducts || '',
-            StartDate: req.body.StartDate || '',
-            EndDate: req.body.EndDate || '',
-            AttachmentLink: req.body.AttachmentLink || '',
-            Status: req.body.Status || 'Published',
-            CreatedDate: new Date().toISOString(),
-            UpdatedDate: new Date().toISOString()
-        };
-
-        const rowArray = headers.map(h => newObj[h] !== undefined ? newObj[h] : '');
-        await sheets.spreadsheets.values.append({
-            spreadsheetId: SPREADSHEET_ID,
-            range: 'Promotions!A1',
-            valueInputOption: 'USER_ENTERED',
-            requestBody: { values: [rowArray] }
-        });
-
-        res.json({ success: true, message: 'Promotion created successfully', data: newObj });
-    } catch (error) {
-        console.error("Error in POST /promotion:", error);
-        res.status(500).json({ success: false, error: error.message });
     }
 });
 
