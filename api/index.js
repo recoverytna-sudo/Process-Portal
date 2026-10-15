@@ -12,9 +12,15 @@ const SPREADSHEET_ID = process.env.SPREADSHEET_ID;
 const LEADER_PASSWORD = process.env.LEADER_PASSWORD || '1366';
 
 async function getSheet(sheetName) {
+    if (!process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL || !process.env.GOOGLE_PRIVATE_KEY || !SPREADSHEET_ID) {
+        throw new Error("Missing required Environment Variables in Vercel!");
+    }
+    
+    const privateKey = process.env.GOOGLE_PRIVATE_KEY.replace(/\\n/g, '\n');
+    
     const serviceAccountAuth = new JWT({
         email: process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL,
-        key: process.env.GOOGLE_PRIVATE_KEY ? process.env.GOOGLE_PRIVATE_KEY.replace(/\\n/g, '\n') : '',
+        key: privateKey,
         scopes: ['https://www.googleapis.com/auth/spreadsheets'],
     });
 
@@ -34,6 +40,7 @@ router.get('/categories', async (req, res) => {
         const data = rows.map(r => r.toObject());
         res.json({ success: true, data });
     } catch (error) {
+        console.error("Error in /categories:", error);
         res.status(500).json({ success: false, error: error.message });
     }
 });
@@ -45,6 +52,7 @@ router.get('/processes', async (req, res) => {
         const data = rows.map(r => r.toObject()).filter(p => p.Status === 'Published');
         res.json({ success: true, data });
     } catch (error) {
+        console.error("Error in /processes:", error);
         res.status(500).json({ success: false, error: error.message });
     }
 });
@@ -58,6 +66,7 @@ router.get('/process-detail', async (req, res) => {
         if (!row) return res.status(404).json({ success: false, message: 'Process not found' });
         res.json({ success: true, data: row.toObject() });
     } catch (error) {
+        console.error("Error in /process-detail:", error);
         res.status(500).json({ success: false, error: error.message });
     }
 });
@@ -85,6 +94,7 @@ router.get('/promotions', async (req, res) => {
 
         res.json({ success: true, data });
     } catch (error) {
+        console.error("Error in /promotions:", error);
         res.status(500).json({ success: false, error: error.message });
     }
 });
@@ -121,6 +131,7 @@ router.post('/process', verifyLeaderAuth, async (req, res) => {
         await sheet.addRow(newRow);
         res.json({ success: true, message: 'Process created successfully', data: newRow });
     } catch (error) {
+        console.error("Error in POST /process:", error);
         res.status(500).json({ success: false, error: error.message });
     }
 });
@@ -140,6 +151,7 @@ router.put('/process', verifyLeaderAuth, async (req, res) => {
         await row.save();
         res.json({ success: true, message: 'Process updated successfully' });
     } catch (error) {
+        console.error("Error in PUT /process:", error);
         res.status(500).json({ success: false, error: error.message });
     }
 });
@@ -157,6 +169,7 @@ router.post('/process-archive', verifyLeaderAuth, async (req, res) => {
         await row.save();
         res.json({ success: true, message: 'Process archived successfully' });
     } catch (error) {
+        console.error("Error in POST /process-archive:", error);
         res.status(500).json({ success: false, error: error.message });
     }
 });
@@ -175,6 +188,7 @@ router.post('/promotion', verifyLeaderAuth, async (req, res) => {
         await sheet.addRow(newRow);
         res.json({ success: true, message: 'Promotion created successfully', data: newRow });
     } catch (error) {
+        console.error("Error in POST /promotion:", error);
         res.status(500).json({ success: false, error: error.message });
     }
 });
@@ -194,6 +208,7 @@ router.put('/promotion', verifyLeaderAuth, async (req, res) => {
         await row.save();
         res.json({ success: true, message: 'Promotion updated successfully' });
     } catch (error) {
+        console.error("Error in PUT /promotion:", error);
         res.status(500).json({ success: false, error: error.message });
     }
 });
@@ -211,6 +226,7 @@ router.post('/promotion-cancel', verifyLeaderAuth, async (req, res) => {
         await row.save();
         res.json({ success: true, message: 'Promotion cancelled successfully' });
     } catch (error) {
+        console.error("Error in POST /promotion-cancel:", error);
         res.status(500).json({ success: false, error: error.message });
     }
 });
