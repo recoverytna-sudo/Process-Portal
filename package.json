@@ -2,10 +2,7 @@
   "name": "company-portal-api",
   "version": "1.0.0",
   "description": "Simple Company Process & Promotion Portal API",
-  "main": "server.js",
-  "scripts": {
-    "start": "node server.js"
-  },
+  "main": "api/index.js",
   "dependencies": {
     "cors": "^2.8.5",
     "dotenv": "^16.4.5",
